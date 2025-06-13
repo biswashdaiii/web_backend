@@ -15,7 +15,7 @@ const DoctorSchema = new mongoose.Schema(
         about: { type: String,required: true},
         date: { type: String,required: true},//when doctor profile is created
         address: { type: Object,required: true},
-        
+        slots_booked:{type:Object,default:{}}
             
             
        
