@@ -10,7 +10,7 @@ export const authAdmin = async (req, res, next) => {
     if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
       return res.json({ success: false, message: "not authorized login again" });
     }
-    next(); // only call next if authorized
+    next(); 
   } catch (error) {
     console.log(error);
     return res.json({ success: false, message: error.message });

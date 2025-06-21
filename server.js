@@ -5,9 +5,10 @@ import authRoutes from "./routes/userRoutes.js";
 import { registerUser, loginUser, getUsers } from "./controllers/userController.js";
 import adminRouter from "./routes/adminRoute.js";
 import 'dotenv/config'
+import { connectDB } from "./config/mongodb.js";
 
 //app config
-
+connectDB()
 const app = express();
 const PORT = process.env.PORT || 5000;
 
