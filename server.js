@@ -4,6 +4,7 @@ import cors from "cors";
 import authRoutes from "./routes/userRoutes.js";
 import { registerUser, loginUser, getUsers } from "./controllers/userController.js";
 import adminRouter from "./routes/adminRoute.js";
+import 'dotenv/config'
 
 //app config
 
@@ -11,20 +12,19 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 //middlewares
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-mongoose
-  .connect("mongodb://localhost:27017/gharko_doctordb", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log(err));
 
-//api endpoints
+//api endpoint
+
 app.use('/api/admin',adminRouter)
+//local host  /api.admin/add-doctor
+app.get('/',(req,res)=>{
+  res.send("Api working")
+}
 
+)
 
 app.use("/api/auth", authRoutes);
 

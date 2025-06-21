@@ -1,9 +1,17 @@
-import multer from "multer";
+import fs from 'fs';
+import multer from 'multer';
 
-const storage=multer.diskStorage({
-    filename:function(req,file,callback){
-        callback(null,file.originalname)
-    }
-})
-const upload=multer({storage})
-export default upload
+const uploadPath = 'uploads';
+
+// Automatically create the folder if it doesn't exist
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ storage });
+export default upload;

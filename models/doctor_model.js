@@ -1,4 +1,4 @@
-const mongoose = require("mongoose")
+import mongoose from "mongoose"
 
 const DoctorSchema = new mongoose.Schema(
     {
@@ -10,7 +10,7 @@ const DoctorSchema = new mongoose.Schema(
         speciality: { type: String,required: true},
         degree: { type: String,required: true},
         experience: { type: String,required: true},
-        avaiable: { type: Boolean,required: true},
+        avaiable: { type: Boolean,default: true},
         fee: { type: Number,required: true},
         about: { type: String,required: true},
         date: { type: String,required: true},//when doctor profile is created
