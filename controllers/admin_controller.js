@@ -93,3 +93,16 @@ export const loginAdmin=async(req,res)=>{
     }
 }
 
+//Ai to get all doctor list 
+export const allDoctors = async (req, res) => {
+  try {
+    const doctors = await doctorModel.find({}).select("-password");
+    console.log("all doctor route hit right")
+    res.json({ success: true, doctors });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+
