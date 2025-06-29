@@ -9,6 +9,8 @@ import { connectDB } from "./config/mongodb.js";
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import path from"path"
+import { doctorRouter } from "./routes/doctorroute.js";
+import userRouter from "./routes/userRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,6 +29,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 //api endpoint
 
 app.use('/api/admin',adminRouter)
+app.use('/api/doctor',doctorRouter)
+app.use('/api/user',userRouter)
+
 //local host  /api.admin/add-doctor
 app.get('/',(req,res)=>{
   res.send("Api working")

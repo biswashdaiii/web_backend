@@ -13,19 +13,18 @@ const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await userModel.create({
+    const userData = await userModel.create({
       name,
       email,
       password: hashedPassword,
-      gender,
-      dob,
-      phone,
-      address,
+     
     });
+    const newUSer=new userModel(userData)
+    const user=await newUSer.save()
 
-    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: userData._id }, JWT_SECRET, { expiresIn: "1h" });
 
-    res.status(201).json({ token, user: { id: newUser._id, name: newUser.name } });
+    res.status(201).json({ token, user: { id: userData._id, name: userData.name } });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
