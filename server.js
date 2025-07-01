@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 import path from"path"
 import { doctorRouter } from "./routes/doctorroute.js";
 import userRouter from "./routes/userRoutes.js";
+import { Server } from "socket.io";
+import { createServer } from "http";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,6 +35,12 @@ app.use('/api/admin',adminRouter)
 app.use('/api/doctor',doctorRouter)
 app.use('/api/user',userRouter)
 
+//socket.io
+// const httpServer=createServer(app);
+// const io=new Server(httpServer,{cors:{origin:"*"}});
+
+
+
 //local host  /api.admin/add-doctor
 app.get('/',(req,res)=>{
   res.send("Api working")
@@ -40,6 +49,6 @@ app.get('/',(req,res)=>{
 )
 
 app.use("/api/auth", authRoutes);
-
+// const onlineUser=new Map();
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

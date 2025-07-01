@@ -7,6 +7,7 @@ export const authDoctor = async (req, res, next) => {
       return res.json({ success: false, message: "not authorized login again" });
     }
     const token_decode = jwt.verify(dToken, process.env.SECRET);
+    req.body.docId=token_decode.id
     if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
       return res.json({ success: false, message: "not authorized login again" });
     }
