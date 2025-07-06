@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import userModel from "../models/userModel.js";
+import doctorModel from "../models/doctor_model.js";
+import { appointmentModel } from "../models/appointmentModel.js";
 
 const JWT_SECRET = "your_secret_key";
 
@@ -55,4 +57,82 @@ const loginUser = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-export { registerUser, loginUser ,getUsers };
+
+
+
+
+
+//Api to book appointment
+const bookAppointment = async (req, res) => {
+  try {
+    const { userId, docId, slotDate, slotTime } = req.body;
+
+    console.log("📥 Request body:", req.body);
+
+    if (!userId || !docId || !slotDate || !slotTime) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    const docData = await doctorModel.findById(docId).select("-password");
+    if (!docData) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
+    }
+
+    console.log("✅ Doctor found:", docData.name);
+
+    if (!docData.available) {
+      return res.json({ success: false, message: "Doctor not available" });
+    }
+
+    const userData = await userModel.findById(userId).select("-password");
+    if (!userData) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    console.log("✅ User found:", userData.name);
+
+    // Slot handling
+    let slots_booked = docData.slots_booked || {};
+    if (!slots_booked[slotDate]) {
+      slots_booked[slotDate] = [];
+    }
+    if (slots_booked[slotDate].includes(slotTime)) {
+      return res.json({ success: false, message: "Slot already booked" });
+    }
+    slots_booked[slotDate].push(slotTime);
+
+    // Create appointment data
+    const appointmentData = {
+      userId: userId.toString(),
+      docId: docId.toString(),
+      userData: userData.toObject(),
+      docData: docData.toObject(),
+      amount: docData.fee.toString(),
+      slotDate,
+      slotTime,
+      date: new Date().toISOString(), // <-- FIXED: previously `data` with a typo
+      cancelled: false,
+      isCompleter: false,
+      payment: docData.fee.toString(), // if you're keeping payment
+    };
+
+    console.log("📝 Appointment to save:", appointmentData);
+
+    const newAppointment = new appointmentModel(appointmentData);
+    await newAppointment.save();
+
+    // Save slots
+    await doctorModel.findByIdAndUpdate(docId, { slots_booked });
+
+    res.json({ success: true, message: "Appointment booked successfully" });
+
+  } catch (error) {
+    console.error("❌ Booking error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+
+
+export { registerUser, loginUser ,getUsers ,bookAppointment};
