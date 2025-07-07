@@ -122,7 +122,7 @@ const bookAppointment = async (req, res) => {
     await newAppointment.save();
 
     // Save slots
-    await doctorModel.findByIdAndUpdate(docId, { slots_booked });
+    await doctorModel.findByIdAndUpdate(docId,{$set:{ slots_booked }} );
 
     res.json({ success: true, message: "Appointment booked successfully" });
 
