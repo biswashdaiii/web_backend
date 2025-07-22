@@ -1,19 +1,28 @@
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
 export const authDoctor = async (req, res, next) => {
   try {
-    const dToken = req.headers['dToken'];
+    const dToken = req.headers["dToken"];
     if (!dToken) {
-      return res.json({ success: false, message: "not authorized login again" });
+      return res.status(401).json({ success: false, message: "Not authorized, login again" });
     }
-    const token_decode = jwt.verify(dToken, process.env.SECRET);
-    req.body.docId=token_decode.id
-    if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
-      return res.json({ success: false, message: "not authorized login again" });
+
+    // Use same secret as login
+    const secret = process.env.mysupersercret || "defaultSecret";
+
+    // Verify and decode token
+    const token_decode = jwt.verify(dToken, secret);
+
+    if (!token_decode || !token_decode.id) {
+      return res.status(401).json({ success: false, message: "Not authorized, login again" });
     }
-    next(); 
+
+    // Attach doctor id to req.body for downstream controllers
+    req.body.docId = token_decode.id;
+
+    next();
   } catch (error) {
     console.log(error);
-    return res.json({ success: false, message: error.message });
+    return res.status(401).json({ success: false, message: error.message });
   }
 };

@@ -4,35 +4,52 @@ import userModel from "../models/userModel.js";
 import doctorModel from "../models/doctor_model.js";
 import { appointmentModel } from "../models/appointmentModel.js";
 
-const JWT_SECRET = "your_secret_key";
 
+// console.log("JWT Secret:", JWT_SECRET);
 const registerUser = async (req, res) => {
+  const JWT_SECRET = process.env.SECRET?.trim();
+  if (!JWT_SECRET) {
+    return res.status(500).json({ message: "JWT secret not configured" });
+  }
+
   const { name, email, password, gender, dob, phone, address } = req.body;
 
   try {
     const existingUser = await userModel.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: "User already exists" });
+    if (existingUser)
+      return res.status(400).json({ message: "User already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const userData = await userModel.create({
+    const user = await userModel.create({
       name,
       email,
       password: hashedPassword,
-     
+      gender,
+      dob,
+      phone,
+      address,
     });
-    const newUSer=new userModel(userData)
-    const user=await newUSer.save()
 
-    const token = jwt.sign({ id: userData._id }, JWT_SECRET, { expiresIn: "1h" });
+    console.log("Signing JWT with secret:", JWT_SECRET);
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "24h" });
+    console.log("Generated token:", token);
 
-    res.status(201).json({ token, user: { id: userData._id, name: userData.name } });
+    res.status(201).json({
+      token,
+      user: { id: user._id, name: user.name },
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
 const loginUser = async (req, res) => {
+  const JWT_SECRET = process.env.SECRET?.trim();
+  if (!JWT_SECRET) {
+    return res.status(500).json({ message: "JWT secret not configured" });
+  }
+
   const { email, password } = req.body;
 
   try {
@@ -40,58 +57,58 @@ const loginUser = async (req, res) => {
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "1h" });
+    console.log("Signing JWT with secret:", JWT_SECRET);
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "24h" });
+    console.log("Generated token:", token);
 
-    res.status(200).json({ token, user: { id: user._id, name: user.name } });
+    res.status(200).json({
+      token,
+      user: { id: user._id, name: user.name },
+    });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
- const getUsers = async (req, res) => {
+
+
+const getUsers = async (req, res) => {
   try {
-    const users = await userModel.find({}, '-password'); // exclude password from results
+    const users = await userModel.find({}, "-password");
     res.status(200).json(users);
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
-
-
-
-
-//Api to book appointment
 const bookAppointment = async (req, res) => {
   try {
     const { userId, docId, slotDate, slotTime } = req.body;
 
-    console.log("📥 Request body:", req.body);
-
     if (!userId || !docId || !slotDate || !slotTime) {
-      return res.status(400).json({ success: false, message: "Missing required fields" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required fields" });
     }
 
     const docData = await doctorModel.findById(docId).select("-password");
-    if (!docData) {
-      return res.status(404).json({ success: false, message: "Doctor not found" });
-    }
-
-    console.log("✅ Doctor found:", docData.name);
+    if (!docData)
+      return res
+        .status(404)
+        .json({ success: false, message: "Doctor not found" });
 
     if (!docData.available) {
       return res.json({ success: false, message: "Doctor not available" });
     }
 
     const userData = await userModel.findById(userId).select("-password");
-    if (!userData) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
+    if (!userData)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
 
-    console.log("✅ User found:", userData.name);
-
-    // Slot handling
     let slots_booked = docData.slots_booked || {};
     if (!slots_booked[slotDate]) {
       slots_booked[slotDate] = [];
@@ -101,7 +118,6 @@ const bookAppointment = async (req, res) => {
     }
     slots_booked[slotDate].push(slotTime);
 
-    // Create appointment data
     const appointmentData = {
       userId: userId.toString(),
       docId: docId.toString(),
@@ -110,29 +126,146 @@ const bookAppointment = async (req, res) => {
       amount: docData.fee.toString(),
       slotDate,
       slotTime,
-      date: new Date().toISOString(), // <-- FIXED: previously `data` with a typo
+      date: new Date().toISOString(),
       cancelled: false,
       isCompleter: false,
-      payment: docData.fee.toString(), // if you're keeping payment
+      payment: docData.fee.toString(),
     };
-
-    console.log("📝 Appointment to save:", appointmentData);
 
     const newAppointment = new appointmentModel(appointmentData);
     await newAppointment.save();
 
-    // Save slots
-    await doctorModel.findByIdAndUpdate(docId,{$set:{ slots_booked }} );
+    const slotPath = `slots_booked.${slotDate}.${slotTime}`;
+    await doctorModel.findByIdAndUpdate(
+      docId,
+      { $set: { [slotPath]: true } },
+      { new: true, upsert: true }
+    );
 
     res.json({ success: true, message: "Appointment booked successfully" });
-
   } catch (error) {
     console.error("❌ Booking error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
+const getProfile = async (req, res) => {
+  try {
+    const userId = req.userId; // get userId directly from req.userId set by auth middleware
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized: No user ID" });
+    }
+
+    const userData = await userModel.findById(userId).select("-password");
+    if (!userData) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({ success: true, userData });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 
+const updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.userId; // from auth middleware
+    const { name, email, phone, address } = req.body;
+    const imageFile = req.file;
+
+    if (!name || !email || !phone) {
+      return res.status(400).json({ success: false, message: "Data missing" });
+    }
+
+    const updatedFields = {
+      name,
+      email,
+      phone,
+      address,
+    };
+
+    if (imageFile) {
+      updatedFields.profileImage = `uploads/${imageFile.filename}`;
+    }
+
+    const updatedUser = await userModel.findByIdAndUpdate(
+      userId,
+      updatedFields,
+      { new: true }
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+//Api to get user appointment for user pannel my-appointments page
+const listAppointments = async (req, res) => {
+  try {
+    const userId = req.userId; 
+    const appointments = await appointmentModel.find({userId})
+    res.json({ success: true, appointments });
+  } catch (error) { 
+    console.error("Error fetching appointments:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+//Api to cancel appointment
+const cancelAppointment = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { appointmentId } = req.body;
+
+    const appointmentData = await appointmentModel.findById(appointmentId);
+    if (!appointmentData) {
+      return res.status(404).json({ success: false, message: "Appointment not found" });
+    }
+
+    // Verify ownership
+    if (appointmentData.userId.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to cancel this appointment" });
+    }
+
+   await appointmentModel.findByIdAndDelete(appointmentId);
 
 
-export { registerUser, loginUser ,getUsers ,bookAppointment};
+    const { docId, slotDate, slotTime } = appointmentData;
+    const doctorData = await doctorModel.findById(docId);
+    let slots_booked = doctorData.slots_booked || {};
+
+    // ✅ Only filter if the date has a slot list
+    if (Array.isArray(slots_booked[slotDate])) {
+      slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime);
+    }
+
+    await doctorModel.findByIdAndUpdate(docId, { slots_booked }, { new: true });
+
+    res.json({ success: true, message: "Appointment cancelled successfully" });
+
+  } catch (error) {
+    console.error("Error cancelling appointment:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export {
+  registerUser,
+  loginUser,
+  getUsers,
+  bookAppointment,
+  getProfile,
+  updateUserProfile,
+  listAppointments,cancelAppointment
+};

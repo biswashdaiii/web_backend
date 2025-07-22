@@ -5,7 +5,7 @@ import doctorModel from "../models/doctor_model.js";
 
 
 export const addDoctor = async (req, res) => {
-   console.log('Received file:', req.file);
+  //  console.log('Received file:', req.file);
 
 
     
@@ -24,8 +24,8 @@ export const addDoctor = async (req, res) => {
 
     const imageFile = req.file;
 
-    console.log("Request Body:", req.body);
-    console.log("Request File:", imageFile);
+    // console.log("Request Body:", req.body);
+    // console.log("Request File:", imageFile);
 
     if (
       !name ||
@@ -97,7 +97,7 @@ export const loginAdmin=async(req,res)=>{
 export const allDoctors = async (req, res) => {
   try {
     const doctors = await doctorModel.find({}).select("-password");
-    console.log("all doctor route hit right")
+    
     res.json({ success: true, doctors });
   } catch (error) {
     console.log(error);

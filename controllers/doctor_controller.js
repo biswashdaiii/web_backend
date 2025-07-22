@@ -38,7 +38,7 @@ export const loginDoctor = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("Login request:", req.body);
+    // console.log("Login request:", req.body);
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "Email and password are required" });
@@ -67,15 +67,17 @@ export const loginDoctor = async (req, res) => {
   }
 };
 
-//Api to get docotr appointment for docotr pannel
- export const appointmentsDoctor=async(req,res)=>{
+export const appointmentsDoctor = async (req, res) => {
   try {
-    const {docId}=req.body
-    const appointments=await appointmentModel.find({docId})
-     res.json({success:true,appointments})
+    const docId = req.userId;
+    console.log("Doctor ID:", docId); // 👈
+    
+    const appointments = await appointmentModel.find({ docId, cancelled: false });
+    console.log("Appointments found:", appointments.length); // 👈
+
+    res.json({ success: true, appointments });
   } catch (error) {
-     console.error("Login error:", error);
+    console.error("Error fetching doctor appointments:", error);
     res.status(500).json({ success: false, message: error.message });
   }
-  
-}
+};

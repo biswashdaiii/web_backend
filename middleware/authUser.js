@@ -1,18 +1,27 @@
-// import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
+import 'dotenv/config';
 
-// export const authAdmin = async (req, res, next) => {
-//   try {
-//     const atoken = req.headers['atoken'];
-//     if (!atoken) {
-//       return res.json({ success: false, message: "not authorized login again" });
-//     }
-//     const token_decode = jwt.verify(atoken, process.env.SECRET);
-//     if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
-//       return res.json({ success: false, message: "not authorized login again" });
-//     }
-//     next(); 
-//   } catch (error) {
-//     console.log(error);
-//     return res.json({ success: false, message: error.message });
-//   }
-// };
+const JWT_SECRET = process.env.SECRET?.trim();
+
+export const authUser = (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader)
+      return res.status(401).json({ success: false, message: "No token" });
+
+    const token = authHeader.split(' ')[1];
+    if (!token)
+      return res.status(401).json({ success: false, message: "Invalid token format" });
+
+   
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Attach user id to req.userId or req.user instead of req.body
+    req.userId = decoded.id;
+
+    next();
+  } catch (error) {
+    console.error("JWT error:", error);
+    return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+};

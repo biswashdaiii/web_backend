@@ -14,7 +14,8 @@ const DoctorSchema = new mongoose.Schema(
     about: { type: String, required: true },
     date: { type: String, required: true },
     address: { type: Object, required: true },
-
+    isOnline: { type: Boolean, default: false },
+    lastSeen: { type: Date, default: Date.now },
     slots_booked: {
       type: Map,
       of: [String],

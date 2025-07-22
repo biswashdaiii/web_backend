@@ -8,8 +8,9 @@
          address: { type: Object,default:{line1:'',line2:''}},
          gender:{type:String,default:"Not Selected"},
          dob:{type:String,default:"Not selected"},
-         phone:{type:String,default:"0000000000"}
-         
+         phone:{type:String,default:"0000000000"},
+         isOnline: { type: Boolean, default: false },
+         lastSeen: { type: Date, default: Date.now },
              
              
         
