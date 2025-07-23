@@ -20,13 +20,13 @@ import {
   updateMessageStatus,
   markMessageAsRead,
   markMessageAsDelivered,
-  getUndeliveredMessages,
+  undeliveredMessages as getUndeliveredMessages,
   updateUserLastSeen,
   createMessage
 } from "./Service/chatService.js";
 
-import User from "./models/User.js";
-import Message from "./models/message.js"; // Fixed incorrect import
+import User from "../backend/models/userModel.js";
+import Message from "./models/Message.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -52,10 +52,11 @@ app.use("/api/chat", chatRoutes);
 const onlineUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("New client connected", socket.id);
+  console.log("New client connected:", socket.id);
   let currentUserId = null;
 
   socket.on('register_user', ({ userId }) => {
+    console.log(`register_user event received for userId: ${userId}`);
     if (!userId) return;
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
@@ -63,8 +64,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on('join_room', async ({ userId, partnerId }) => {
+    console.log(`join_room event received: userId=${userId}, partnerId=${partnerId}`);
     if (!userId || !partnerId) return;
-
     currentUserId = userId;
     onlineUsers.set(userId, socket.id);
     const roomId = getRoomId(userId, partnerId);
@@ -104,20 +105,32 @@ io.on("connection", (socket) => {
   });
 
   socket.on("sent_message", async (message) => {
+    console.log("sent_message received:", message);
     const { messageId, sender, receiver, message: text } = message;
-    if (!messageId || !sender || !receiver || !text) return;
+    if (!messageId || !sender || !receiver || !text) {
+      console.log("sent_message missing required fields");
+      return;
+    }
 
     const roomId = getRoomId(sender, receiver);
-    await createMessage({ ...message, status: 'sent', roomId });
+    try {
+      await createMessage({ ...message, status: 'sent', roomId });
+      console.log(`Message saved to DB with id ${messageId}`);
+    } catch (e) {
+      console.error("Error saving message:", e);
+    }
 
     if (onlineUsers.has(receiver)) {
       message.status = 'delivered';
       await updateMessageStatus(messageId, 'delivered');
+      console.log(`Message status updated to delivered for messageId ${messageId}`);
     } else {
       message.status = 'sent';
+      console.log(`Receiver offline, message status remains sent for messageId ${messageId}`);
     }
 
     io.to(roomId).emit("message", message);
+    console.log(`Message emitted to room ${roomId}`);
 
     if (onlineUsers.has(receiver)) {
       const receiverSocket = io.sockets.sockets.get(onlineUsers.get(receiver));
@@ -130,97 +143,17 @@ io.on("connection", (socket) => {
           messageId,
           message: text
         });
+        console.log(`Notification sent to receiver socket`);
       }
-    }
-  });
-
-  const typingTimeouts = new Map();
-
-  socket.on("typing_start", ({ userId, receiverId }) => {
-    if (!userId || !receiverId) return;
-    const roomId = getRoomId(userId, receiverId);
-    const key = `${userId}-${receiverId}`;
-
-    if (typingTimeouts.has(key)) {
-      clearTimeout(typingTimeouts.get(key));
-    }
-
-    io.to(roomId).emit("typing_indicator", { userId, isTyping: true });
-
-    const timeoutId = setTimeout(() => {
-      io.to(roomId).emit("typing_indicator", { userId, isTyping: false });
-      typingTimeouts.delete(key);
-    }, 5000);
-
-    typingTimeouts.set(key, timeoutId);
-  });
-
-  socket.on("typing_end", ({ userId, receiverId }) => {
-    if (!userId || !receiverId) return;
-    const roomId = getRoomId(userId, receiverId);
-    const key = `${userId}-${receiverId}`;
-
-    if (typingTimeouts.has(key)) {
-      clearTimeout(typingTimeouts.get(key));
-      typingTimeouts.delete(key);
-    }
-
-    io.to(roomId).emit("typing_indicator", { userId, isTyping: false });
-  });
-
-  socket.on("message_delivered", async ({ messageId, senderId, receiverId }) => {
-    await updateMessageStatus(messageId, 'delivered');
-    const roomId = getRoomId(senderId, receiverId);
-    io.to(roomId).emit("message_status", { messageId, status: 'delivered', sender: senderId, receiver: receiverId });
-  });
-
-  socket.on("messages_read", async ({ messageIds, senderId, receiverId }) => {
-    for (const messageId of messageIds) {
-      await updateMessageStatus(messageId, 'read');
-    }
-    const roomId = getRoomId(senderId, receiverId);
-    messageIds.forEach(messageId => {
-      io.to(roomId).emit("message_status", { messageId, status: 'read', sender: senderId, receiver: receiverId });
-    });
-  });
-
-  socket.on("mark_messages_read", async ({ userId, partnerId }) => {
-    const count = await markMessageAsRead(userId, partnerId);
-    const roomId = getRoomId(userId, partnerId);
-
-    if (count > 0) {
-      io.to(roomId).emit("messages_all_read", {
-        reader: userId,
-        sender: partnerId
-      });
-
-      const senderSocket = io.sockets.sockets.get(onlineUsers.get(partnerId));
-      if (senderSocket && !senderSocket.rooms.has(roomId)) {
-        senderSocket.emit("messages_all_read", {
-          reader: userId,
-          sender: partnerId
-        });
-      }
-    }
-  });
-
-  socket.on("user_status_change", async ({ userId, status, lastSeen }) => {
-    if (status === "offline") {
-      await updateUserLastSeen(userId, lastSeen);
-      if (onlineUsers.get(userId) === socket.id) {
-        onlineUsers.delete(userId);
-      }
-      io.emit("user_status", { userId, status: 'offline', lastSeen });
-    } else {
-      onlineUsers.set(userId, socket.id);
-      io.emit("user_status", { userId, status: 'online' });
     }
   });
 
   socket.on("disconnect", async () => {
+    console.log(`Client disconnected: ${socket.id} userId: ${currentUserId}`);
     if (currentUserId) {
       if (onlineUsers.get(currentUserId) === socket.id) {
         onlineUsers.delete(currentUserId);
+        console.log(`User ${currentUserId} removed from onlineUsers`);
       }
       const lastSeen = new Date().toISOString();
       await updateUserLastSeen(currentUserId, lastSeen);
@@ -228,6 +161,7 @@ io.on("connection", (socket) => {
     }
   });
 });
+
 
 app.get("/", (req, res) => res.send("API working"));
 

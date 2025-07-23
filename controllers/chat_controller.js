@@ -1,4 +1,4 @@
-import { fetchchatMessages,chatRoom } from "../Service/chatService";
+import { fetchchatMessages,chatRoom } from "../Service/chatService.js";
 
 export const getMessages = async (req, res) => {
     const { senderId,receiverId,pageId,limit } = req.query ;

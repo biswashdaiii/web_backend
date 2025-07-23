@@ -1,4 +1,4 @@
-import  Message from "../models/message";
+import  Message from "../models/Message.js";
 import { getRoomId } from "../config/chatHelper.js";
 import mongoose, { mongo } from "mongoose";
 

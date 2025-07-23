@@ -1,11 +1,10 @@
 import express from 'express';
-import { getChatRoom,getMessages } from '../controllers/chat_controller';
+import { getChatRoom, getMessages } from '../controllers/chat_controller.js';
+import { authUser } from '../middleware/authUser.js';
 
-import { auth } from '../middleware/auth.js';
+const router = express.Router();
 
-const router=express.Router();
-
-router.get('/messages', auth, getMessages);
-router.get('/chat-rooms', auth, getChatRoom);
+router.get('/messages', authUser, getMessages);
+router.get('/chat-rooms', authUser, getChatRoom);
 
 export default router;
