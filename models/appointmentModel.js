@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const appointmentSchema = new mongoose.Schema({
   userId: { type: String, required: true },
-  docId: { type: String, required: true },
+  docId: { type: mongoose.Schema.Types.ObjectId, required: true },
   slotDate: { type: String, required: true },
   slotTime: { type: String, required: true },
   docData: { type: Object, required: true },
@@ -11,7 +11,7 @@ const appointmentSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   cancelled: { type: Boolean, default: false },
   payment: { type: Number },  // optional, or remove if unused
-  isCompleter: { type: Boolean, default: false },
+  isCompleted: { type: Boolean, default: false },
 });
 
 

@@ -12,158 +12,177 @@ import { connectDB } from "./config/mongodb.js";
 import adminRouter from "./routes/adminRoute.js";
 import { doctorRouter } from "./routes/doctorroute.js";
 import userRouter from "./routes/userRoutes.js";
-import chatRoutes from "./routes/chatRoute.js";
 
-import { getRoomId } from "./config/chatHelper.js";
-import {
-  getUserLastSeen,
-  updateMessageStatus,
-  markMessageAsRead,
-  markMessageAsDelivered,
-  undeliveredMessages as getUndeliveredMessages,
-  updateUserLastSeen,
-  createMessage
-} from "./Service/chatService.js";
-
-import User from "../backend/models/userModel.js";
-import Message from "./models/Message.js";
+import User from "./models/userModel.js";
+import { EsewaInitiatePayment, paymentStatus } from './controllers/esewa.controller.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 connectDB();
+
 const app = express();
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
-  cors: { origin: "*" }
+  cors: { 
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Routes
 app.use('/api/admin', adminRouter);
 app.use('/api/doctor', doctorRouter);
 app.use('/api/user', userRouter);
-app.use("/api/auth", authRoutes);
-app.use("/api/chat", chatRoutes);
+app.use("/api/auth", authRoutes); 
+// === Socket.io & Online Users ===
 
 const onlineUsers = new Map();
 
+function getReceiverSocketId(receiverId) {
+  return onlineUsers.get(receiverId);
+}
+
+function getOnlineUsers() {
+  return Array.from(onlineUsers.keys());
+}
+
 io.on("connection", (socket) => {
   console.log("New client connected:", socket.id);
-  let currentUserId = null;
 
-  socket.on('register_user', ({ userId }) => {
-    console.log(`register_user event received for userId: ${userId}`);
-    if (!userId) return;
-    currentUserId = userId;
+  const userId = socket.handshake.query.userId;
+  if (userId && userId !== "undefined") {
     onlineUsers.set(userId, socket.id);
     console.log(`User ${userId} connected with socket: ${socket.id}`);
+
+    io.emit("getOnlineUsers", getOnlineUsers());
+    socket.broadcast.emit("user_status", { userId, status: 'online' });
+  }
+
+  socket.on("newMessage", async (messageData) => {
+    try {
+      const { senderId, receiverId, text, image } = messageData;
+
+      if (!senderId || !receiverId || (!text && !image)) {
+        console.log("Invalid message data");
+        return;
+      }
+
+      const newMessage = new Message({
+        senderId,
+        receiverId,
+        text,
+        image
+      });
+
+      await newMessage.save();
+
+      await newMessage.populate("senderId", "name username profilePic");
+      await newMessage.populate("receiverId", "name username profilePic");
+
+      const receiverSocketId = getReceiverSocketId(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("newMessage", newMessage);
+      }
+
+      socket.emit("messageDelivered", {
+        tempId: messageData.tempId,
+        message: newMessage
+      });
+
+      console.log(`Message sent from ${senderId} to ${receiverId}`);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      socket.emit("messageError", {
+        tempId: messageData.tempId,
+        error: "Failed to send message"
+      });
+    }
   });
 
-  socket.on('join_room', async ({ userId, partnerId }) => {
-    console.log(`join_room event received: userId=${userId}, partnerId=${partnerId}`);
-    if (!userId || !partnerId) return;
-    currentUserId = userId;
-    onlineUsers.set(userId, socket.id);
-    const roomId = getRoomId(userId, partnerId);
-    socket.join(roomId);
-    console.log(`User ${userId} joined room ${roomId}`);
+  socket.on("typing", (data) => {
+    const { senderId, receiverId, isTyping } = data;
+    const receiverSocketId = getReceiverSocketId(receiverId);
 
-    try {
-      const undeliveredMessages = await getUndeliveredMessages(userId, partnerId);
-      const undeliveredCount = await markMessageAsDelivered(userId, partnerId);
-
-      if (undeliveredCount > 0) {
-        undeliveredMessages.forEach((msg) => {
-          io.to(roomId).emit("message_status", {
-            messageId: msg.messageId,
-            status: 'delivered',
-            sender: msg.sender,
-            receiver: msg.receiver
-          });
-        });
-      }
-
-      io.to(roomId).emit("user_status", { userId, status: 'online' });
-
-      if (onlineUsers.has(partnerId)) {
-        socket.emit("user_status", { userId: partnerId, status: 'online' });
-      } else {
-        const lastSeen = await getUserLastSeen(partnerId);
-        socket.emit("user_status", {
-          userId: partnerId,
-          status: 'offline',
-          lastSeen: lastSeen || new Date().toISOString()
-        });
-      }
-    } catch (err) {
-      console.error("Error joining room:", err);
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("userTyping", {
+        userId: senderId,
+        isTyping
+      });
     }
   });
 
-  socket.on("sent_message", async (message) => {
-    console.log("sent_message received:", message);
-    const { messageId, sender, receiver, message: text } = message;
-    if (!messageId || !sender || !receiver || !text) {
-      console.log("sent_message missing required fields");
-      return;
-    }
-
-    const roomId = getRoomId(sender, receiver);
+  socket.on("markAsRead", async (data) => {
     try {
-      await createMessage({ ...message, status: 'sent', roomId });
-      console.log(`Message saved to DB with id ${messageId}`);
-    } catch (e) {
-      console.error("Error saving message:", e);
-    }
+      const { userId, partnerId } = data;
 
-    if (onlineUsers.has(receiver)) {
-      message.status = 'delivered';
-      await updateMessageStatus(messageId, 'delivered');
-      console.log(`Message status updated to delivered for messageId ${messageId}`);
-    } else {
-      message.status = 'sent';
-      console.log(`Receiver offline, message status remains sent for messageId ${messageId}`);
-    }
+      const result = await Message.updateMany(
+        {
+          senderId: partnerId,
+          receiverId: userId,
+          isRead: false
+        },
+        { isRead: true }
+      );
 
-    io.to(roomId).emit("message", message);
-    console.log(`Message emitted to room ${roomId}`);
-
-    if (onlineUsers.has(receiver)) {
-      const receiverSocket = io.sockets.sockets.get(onlineUsers.get(receiver));
-      const senderUser = await User.findById(sender).select("username");
-
-      if (receiverSocket && !receiverSocket.rooms.has(roomId)) {
-        receiverSocket.emit("notification", {
-          senderId: sender,
-          senderName: senderUser?.username,
-          messageId,
-          message: text
+      const senderSocketId = getReceiverSocketId(partnerId);
+      if (senderSocketId) {
+        io.to(senderSocketId).emit("messagesRead", {
+          userId,
+          partnerId,
+          count: result.modifiedCount
         });
-        console.log(`Notification sent to receiver socket`);
       }
+
+      console.log(`Messages marked as read between ${userId} and ${partnerId}`);
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
     }
   });
 
   socket.on("disconnect", async () => {
-    console.log(`Client disconnected: ${socket.id} userId: ${currentUserId}`);
-    if (currentUserId) {
-      if (onlineUsers.get(currentUserId) === socket.id) {
-        onlineUsers.delete(currentUserId);
-        console.log(`User ${currentUserId} removed from onlineUsers`);
+    console.log(`Client disconnected: ${socket.id} userId: ${userId}`);
+
+    if (userId && onlineUsers.get(userId) === socket.id) {
+      onlineUsers.delete(userId);
+      console.log(`User ${userId} removed from onlineUsers`);
+
+      try {
+        await User.findByIdAndUpdate(userId, {
+          lastSeen: new Date()
+        });
+      } catch (err) {
+        console.error("Error updating last seen:", err);
       }
-      const lastSeen = new Date().toISOString();
-      await updateUserLastSeen(currentUserId, lastSeen);
-      io.emit("user_status", { userId: currentUserId, status: 'offline', lastSeen });
+
+      io.emit("getOnlineUsers", getOnlineUsers());
+      socket.broadcast.emit("user_status", {
+        userId,
+        status: 'offline',
+        lastSeen: new Date().toISOString()
+      });
     }
+  });
+
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
   });
 });
 
+app.set('io', io);
 
-app.get("/", (req, res) => res.send("API working"));
+app.get("/", (req, res) => res.send("Chat API working"));
+app.post("/initiate-payment", EsewaInitiatePayment);
+app.post("/payment-status", paymentStatus);
 
-export { httpServer };
+export { httpServer, io };
 export default app;
