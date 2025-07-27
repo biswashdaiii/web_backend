@@ -1,36 +1,37 @@
-import {
-  handleSendMessage,
-  handleTyping,
-  handleMarkAsRead,
-  handleUserDisconnection,
-  getOnlineUsers
-} from "./handlers.js"; // If you split those helpers
+import { Server } from "socket.io";
+import http from "http";
+import express from "express";
 
-export const setupSocket = (io) => {
-  global.io = io;
-  global.onlineUsers = new Map();
+const app = express();
+const server = http.createServer(app);
 
-  io.on("connection", (socket) => {
-    const userId = socket.handshake.query.userId;
-    
-    if (userId) {
-      global.onlineUsers.set(userId, socket.id);
-      socket.broadcast.emit("user_status", { userId, status: "online" });
-      io.emit("getOnlineUsers", getOnlineUsers());
-    }
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173"],
+  },
+});
 
-    // Message sending
-    socket.on("sendMessage", (messageData) => handleSendMessage(socket, messageData));
+export function getReceiverSocketId(userId) {
+  return userSocketMap[userId];
+}
 
-    // Typing event
-    socket.on("typing", (data) => handleTyping(socket, data));
+// used to store online users
+const userSocketMap = {}; // {userId: socketId}
 
-    // Mark as read
-    socket.on("markAsRead", (data) => handleMarkAsRead(socket, data));
+io.on("connection", (socket) => {
+  console.log("A user connected", socket.id);
 
-    // Disconnect
-    socket.on("disconnect", () => {
-      handleUserDisconnection(socket, userId);
-    });
+  const userId = socket.handshake.query.userId;
+  if (userId) userSocketMap[userId] = socket.id;
+
+  // io.emit() is used to send events to all the connected clients
+  io.emit("getOnlineUsers", Object.keys(userSocketMap));
+
+  socket.on("disconnect", () => {
+    console.log("A user disconnected", socket.id);
+    delete userSocketMap[userId];
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
-};
+});
+
+export { io, server };

@@ -1,5 +1,6 @@
 import { EsewaPaymentGateway, EsewaCheckStatus } from "esewajs";
 import { Transaction } from '../models/transaction.model.js';
+import { v4 as uuidv4 } from 'uuid'; // ✅ Add this at the top
 
 export const EsewaInitiatePayment = async (req, res) => {
   console.log("Received payment initiation request:", req.body);
@@ -13,13 +14,15 @@ export const EsewaInitiatePayment = async (req, res) => {
     return res.status(400).json({ error: "Invalid appointmentId" });
   }
 
+  const transaction_uuid = uuidv4(); // ✅ This generates a unique ID every time
+
   try {
     const reqPayment = await EsewaPaymentGateway(
       amount,
       0,
       0,
       0,
-      appointmentId,
+      transaction_uuid, // ✅ pass this instead of appointmentId here
       process.env.MERCHANT_ID,
       process.env.ESEWA_SECRET,
       process.env.SUCCESS_URL,
@@ -37,7 +40,8 @@ export const EsewaInitiatePayment = async (req, res) => {
 
     if (reqPayment.status === 200) {
       const transaction = new Transaction({
-        product_id: appointmentId,
+        product_id: appointmentId, // still store original appointment
+        transaction_uuid,          // ✅ store uuid for status check later
         amount,
       });
       await transaction.save();

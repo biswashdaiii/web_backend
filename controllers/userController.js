@@ -213,7 +213,8 @@ const updateUserProfile = async (req, res) => {
 //Api to get user appointment for user pannel my-appointments page
 const listAppointments = async (req, res) => {
   try {
-    const userId = req.userId; 
+    const userId = req.user._id;
+
     const appointments = await appointmentModel.find({userId})
     res.json({ success: true, appointments });
   } catch (error) { 

@@ -13,11 +13,10 @@ export const authUser = (req, res, next) => {
     if (!token)
       return res.status(401).json({ success: false, message: "Invalid token format" });
 
-   
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // Attach user id to req.userId or req.user instead of req.body
-    req.userId = decoded.id;
+    // Set req.user with _id to match controller expectations
+    req.user = { _id: decoded.id };
 
     next();
   } catch (error) {
