@@ -77,21 +77,30 @@ export const addDoctor = async (req, res) => {
 };
 
 //Api for admin login
-export const loginAdmin=async(req,res)=>{
-    try {
-        const{email,password}=req.body
-        if(email === process.env.ADMIN_EMAIL && password===process.env.ADMIN_PASSWORD){
-            const token=jwt.sign(email+password,process.env.SECRET)
-            res.json({success:true,token})
-        }else{
-            res.json({success:false,message:"Invalid credeitials for admin"})
-        }
-    } catch (error) {
-        console.log(error)
-        res.json({success:false,message:error.message})
-        
+
+
+export const loginAdmin = async (req, res) => {
+    console.log("loginAdmin function called");
+  try {
+    const { email, password } = req.body;
+
+    console.log("Admin Email env:", process.env.ADMIN_EMAIL);
+    console.log("Admin Password env:", process.env.ADMIN_PASSWORD);
+    console.log("Received Login:", email, password);
+
+    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+      const token = jwt.sign({ email }, process.env.SECRET, { expiresIn: '1h' });
+      res.json({ success: true, token });
+    } else {
+      res.json({ success: false, message: "Invalid credentials for admin" });
     }
-}
+  } catch (error) {
+    console.error(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+
 
 //Ai to get all doctor list 
 export const allDoctors = async (req, res) => {
@@ -104,5 +113,9 @@ export const allDoctors = async (req, res) => {
     res.json({ success: false, message: error.message });
   }
 };
+
+
+
+
 
 

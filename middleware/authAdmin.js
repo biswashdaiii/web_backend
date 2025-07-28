@@ -6,11 +6,14 @@ export const authAdmin = async (req, res, next) => {
     if (!atoken) {
       return res.json({ success: false, message: "not authorized login again" });
     }
-    const token_decode = jwt.verify(atoken, process.env.SECRET);
-    if (token_decode !== process.env.ADMIN_EMAIL + process.env.ADMIN_PASSWORD) {
+    const decoded = jwt.verify(atoken, process.env.SECRET);
+
+    // decoded is an object like { email: "biswash@gmail.com", iat: ..., exp: ... }
+    if (decoded.email !== process.env.ADMIN_EMAIL) {
       return res.json({ success: false, message: "not authorized login again" });
     }
-    next(); 
+
+    next();
   } catch (error) {
     console.log(error);
     return res.json({ success: false, message: error.message });

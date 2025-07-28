@@ -12,8 +12,8 @@ import { doctorRouter } from "./routes/doctorroute.js";
 import userRouter from "./routes/userRoutes.js";
 
 import { EsewaInitiatePayment, paymentStatus } from './controllers/esewa.controller.js';
-import {  server } from "./socket/socket.js";
 import messageRouter from "./routes/messageroute.js";
+import doctorMessageRouter from "./routes/doctorMessageroute.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,8 +26,10 @@ const app = express();
 
 // Middleware
 app.use(express.json());
+console.log("Loaded SECRET env:", process.env.SECRET);
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+origin: ["http://localhost:5173", "http://localhost:5174"],
+
   credentials: true
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -38,6 +40,7 @@ app.use('/api/doctor', doctorRouter);
 app.use('/api/user', userRouter);
 app.use("/api/auth", authRoutes); 
 app.use("/messages",messageRouter)
+app.use("/api/doctor/messages", doctorMessageRouter);
 
 // Esewa Routes
 app.post("/initiate-payment", EsewaInitiatePayment);
