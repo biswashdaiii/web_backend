@@ -22,9 +22,13 @@ export const getUsersForSidebarForDoctor = async (req, res) => {
 
 export const getMessages = async (req, res) => {
   try {
-    const userToChatId = req.params.id.toString();
-    const myId = req.user._id.toString();
+    console.log("req.docId:", req.docId); // debug
+    const userToChatId = req.params.id?.toString();
+    const myId = req.docId?.toString();
 
+    if (!myId) {
+      return res.status(401).json({ error: "Doctor ID missing" });
+    }
     if (!userToChatId) {
       return res.status(400).json({ error: "User ID is required" });
     }
@@ -48,9 +52,12 @@ export const getMessages = async (req, res) => {
 export const sendMessage = async (req, res) => {
   try {
     const { text, image } = req.body;
-    const receiverId = req.params.id.toString();
-    const senderId = req.user._id.toString();
+    const receiverId = req.params.id?.toString();
+    const senderId = req.docId?.toString();
 
+    if (!senderId) {
+      return res.status(401).json({ error: "Doctor ID missing" });
+    }
     if (!text && !image) {
       return res.status(400).json({ error: "Message must contain text or image." });
     }
@@ -75,3 +82,4 @@ export const sendMessage = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
