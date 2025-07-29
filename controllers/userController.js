@@ -170,7 +170,7 @@ const getProfile = async (req, res) => {
 
 const updateUserProfile = async (req, res) => {
   try {
-    const userId = req.userId; // from auth middleware
+    const userId = req.user._id; // from auth middleware
     const { name, email, phone, address } = req.body;
     const imageFile = req.file;
 
@@ -182,7 +182,7 @@ const updateUserProfile = async (req, res) => {
       name,
       email,
       phone,
-      address,
+      address, // now string
     };
 
     if (imageFile) {
@@ -226,40 +226,49 @@ const listAppointments = async (req, res) => {
 //Api to cancel appointment
 const cancelAppointment = async (req, res) => {
   try {
-    const userId = req.userId;
+    console.log("Cancel appointment called");
+    const userId = req.user?._id;
     const { appointmentId } = req.body;
+    console.log("UserId:", userId);
+    console.log("AppointmentId:", appointmentId);
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized: no user id found" });
+    }
+    if (!appointmentId) {
+      return res.status(400).json({ success: false, message: "No appointmentId provided" });
+    }
 
     const appointmentData = await appointmentModel.findById(appointmentId);
     if (!appointmentData) {
       return res.status(404).json({ success: false, message: "Appointment not found" });
     }
 
-    // Verify ownership
-    if (appointmentData.userId.toString() !== userId.toString()) {
+    if (!appointmentData.userId || appointmentData.userId.toString() !== userId.toString()) {
       return res.status(403).json({ success: false, message: "Not authorized to cancel this appointment" });
     }
 
-   await appointmentModel.findByIdAndDelete(appointmentId);
-
+    await appointmentModel.findByIdAndDelete(appointmentId);
 
     const { docId, slotDate, slotTime } = appointmentData;
     const doctorData = await doctorModel.findById(docId);
-    let slots_booked = doctorData.slots_booked || {};
+    let slots_booked = doctorData?.slots_booked || {};
 
-    // ✅ Only filter if the date has a slot list
     if (Array.isArray(slots_booked[slotDate])) {
       slots_booked[slotDate] = slots_booked[slotDate].filter(e => e !== slotTime);
     }
 
     await doctorModel.findByIdAndUpdate(docId, { slots_booked }, { new: true });
 
-    res.json({ success: true, message: "Appointment cancelled successfully" });
+    return res.json({ success: true, message: "Appointment cancelled successfully" });
 
   } catch (error) {
     console.error("Error cancelling appointment:", error);
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
 
 export {
   registerUser,
