@@ -82,75 +82,79 @@ const getUsers = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 const bookAppointment = async (req, res) => {
+  console.log("▶️ bookAppointment controller called");
+  console.log("🔸 Request body:", req.body);
+  console.log("🔸 Authenticated user (req.user):", req.user);
+
   try {
-    const { userId, docId, slotDate, slotTime } = req.body;
+    const userId = req.user._id;
+    const { docId, slotDate, slotTime } = req.body;
+      console.log("✅ Extracted fields:", { docId, slotDate, slotTime, userId });
+    console.log("Request body:", req.body);
+
 
     if (!userId || !docId || !slotDate || !slotTime) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required fields" });
+        console.log("❌ Missing one or more required fields");
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    const userData = await userModel.findById(userId).select("-password -someOtherSensitiveFields");
+    if (!userData) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const docData = await doctorModel.findById(docId).select("-password");
-    if (!docData)
-      return res
-        .status(404)
-        .json({ success: false, message: "Doctor not found" });
-
-    if (!docData.available) {
-      return res.json({ success: false, message: "Doctor not available" });
+    if (!docData) {
+      return res.status(404).json({ success: false, message: "Doctor not found" });
     }
 
-    const userData = await userModel.findById(userId).select("-password");
-    if (!userData)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+    if (!docData.available) {
+      return res.status(400).json({ success: false, message: "Doctor not available" });
+    }
 
     let slots_booked = docData.slots_booked || {};
     if (!slots_booked[slotDate]) {
       slots_booked[slotDate] = [];
     }
     if (slots_booked[slotDate].includes(slotTime)) {
-      return res.json({ success: false, message: "Slot already booked" });
+      return res.status(409).json({ success: false, message: "Slot already booked" });
     }
+
     slots_booked[slotDate].push(slotTime);
 
     const appointmentData = {
       userId: userId.toString(),
       docId: docId.toString(),
-      userData: userData.toObject(),
       docData: docData.toObject(),
-      amount: docData.fee.toString(),
+      userData: userData.toObject(),
+      amount: docData.fee,
       slotDate,
       slotTime,
-      date: new Date().toISOString(),
+      date: new Date(),
       cancelled: false,
-      isCompleter: false,
-      payment: docData.fee.toString(),
+      isCompleted: false,
+      payment: docData.fee,
     };
+    
 
     const newAppointment = new appointmentModel(appointmentData);
     await newAppointment.save();
 
-    const slotPath = `slots_booked.${slotDate}.${slotTime}`;
-    await doctorModel.findByIdAndUpdate(
-      docId,
-      { $set: { [slotPath]: true } },
-      { new: true, upsert: true }
-    );
+    await doctorModel.findByIdAndUpdate(docId, { slots_booked }, { new: true });
 
-    res.json({ success: true, message: "Appointment booked successfully" });
+    return res.status(201).json({ success: true, message: "Appointment booked successfully", appointment: newAppointment });
   } catch (error) {
     console.error("❌ Booking error:", error);
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+
 const getProfile = async (req, res) => {
   try {
-    const userId = req.userId; // get userId directly from req.userId set by auth middleware
+    const userId = req.user._id;  // fixed here
     if (!userId) {
       return res.status(401).json({ success: false, message: "Unauthorized: No user ID" });
     }
@@ -160,7 +164,7 @@ const getProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    res.json({ success: true, userData });
+    res.json(userData);  // just send the user object directly
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: error.message });

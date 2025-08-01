@@ -9,6 +9,11 @@ const transactionSchema=new mongoose.Schema({
         required:true,
         min:0,//Amount should not be negative
     },
+    transaction_uuid: {
+    type: String,
+    required: true,
+    unique: true, // optional but recommended to avoid duplicates
+  },
     status:{
         type:String,
         required:true,

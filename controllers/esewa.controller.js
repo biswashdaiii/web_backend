@@ -48,6 +48,7 @@ export const EsewaInitiatePayment = async (req, res) => {
       console.log("Transaction saved successfully");
       return res.json({
         url: reqPayment.request.res.responseUrl,
+         formFields: reqPayment.formData,
       });
     } else {
       return res.status(400).json({ error: "Failed to initiate payment" });
@@ -61,30 +62,43 @@ export const EsewaInitiatePayment = async (req, res) => {
 
 
 export const paymentStatus = async (req, res) => {
-  const { product_id } = req.body; // This remains product_id to match transaction.product_id
+  const { transaction_uuid } = req.body;
+  console.log("paymentStatus called with UUID:", transaction_uuid);
   try {
-    // Find transaction by product_id (which is appointmentId)
-    const transaction = await Transaction.findOne({ product_id });
+    const transaction = await Transaction.findOne({ transaction_uuid });
+    console.log("Found transaction:", transaction);
     if (!transaction) {
       return res.status(400).json({ message: "Transaction not found" });
     }
 
+    console.log("Checking payment status for:", {
+      amount: transaction.amount,
+      transaction_uuid: transaction.transaction_uuid,
+      merchant_id: process.env.MERCHANT_ID,
+      status_url: process.env.ESEWAPAYMENT_STATUS_CHECK_URL,
+    });
+
     const paymentStatusCheck = await EsewaCheckStatus(
       transaction.amount,
-      transaction.product_id,
+      transaction.transaction_uuid,
       process.env.MERCHANT_ID,
       process.env.ESEWAPAYMENT_STATUS_CHECK_URL
     );
 
+    console.log("eSewa status check response:", paymentStatusCheck);
+
     if (paymentStatusCheck.status === 200) {
-      // Update transaction status from the payment check
       transaction.status = paymentStatusCheck.data.status;
       await transaction.save();
 
       return res.status(200).json({ message: "Transaction status updated successfully" });
+    } else {
+      // Handle unexpected status code from eSewa here
+      return res.status(400).json({ message: "eSewa returned error status", data: paymentStatusCheck.data });
     }
   } catch (error) {
-    console.error("Error updating transaction status:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Error updating transaction status:", error.response?.data || error.message);
+    res.status(500).json({ message: "Server error", error: error.response?.data || error.message });
   }
 };
+
